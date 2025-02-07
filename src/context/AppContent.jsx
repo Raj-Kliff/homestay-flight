@@ -3,8 +3,7 @@ import { createContext, useState } from "react";
 export const AppContext = createContext();
 
 const AppContextProvider = (props) => {
-    // const [dropOffLocationType, setDropOffLocationType] = useState('oneWay')
-    const [dropOffLocationType, setDropOffLocationType] = useState('multiCity')
+    const [dropOffLocationType, setDropOffLocationType] = useState('oneWay')
 
     const value = {dropOffLocationType, setDropOffLocationType}
 

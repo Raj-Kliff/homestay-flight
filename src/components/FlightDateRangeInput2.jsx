@@ -54,12 +54,12 @@ const FlightDateRangeInput2 = ({ hasButtonSubmit = false }) => {
               </PopoverButton>
 
               {/* BUTTON SUBMIT OF FORM */}
-              <a
+              {/* <a
                 type="button"
-                class="flex h-14 mt-5 sm:mt-0 sm:ms-5 w-full items-center justify-center rounded-full bg-purple-500 text-white hover:bg-purple-600 focus:outline-none md:h-16 md:w-16"
+                className="flex h-14 mt-5 sm:mt-0 sm:ms-5 w-full items-center justify-center rounded-full bg-purple-500 text-white hover:bg-purple-600 focus:outline-none md:h-16 md:w-16"
                 href="#"
               >
-                <span class="me-3 md:hidden">Search</span>
+                <span className="me-3 md:hidden">Search</span>
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   viewBox="0 0 24 24"
@@ -67,7 +67,7 @@ const FlightDateRangeInput2 = ({ hasButtonSubmit = false }) => {
                   height="24"
                   color="currentColor"
                   fill="none"
-                  class="h-6 w-6"
+                  className="h-6 w-6"
                 >
                   <path
                     d="M17.5 17.5L22 22"
@@ -83,7 +83,7 @@ const FlightDateRangeInput2 = ({ hasButtonSubmit = false }) => {
                     stroke-linejoin="round"
                   ></path>
                 </svg>
-              </a>
+              </a> */}
             </div>
 
             {open && (
