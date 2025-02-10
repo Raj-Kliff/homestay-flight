@@ -31,7 +31,9 @@ const FlightSearchForm = ({}) => {
   const [showOptions, setShowOptions] = useState(false)
 
   const [multiCityFlights, setMultiCityFlights] = useState([{id: 1}])
-  const handleAddMulticityFlight = () => {
+  
+  const handleAddMulticityFlight = (e) => {
+    e.preventDefault();
     setMultiCityFlights([...multiCityFlights, { id: multiCityFlights.length + 1}])
   }
 
@@ -198,10 +200,10 @@ const FlightSearchForm = ({}) => {
             {
               dropOffLocationType == 'multiCity' && 
               <div className='flex-1'>
-                <button onClick={()=>handleAddMulticityFlight()} className={`${multiCityFlights.length >= 5 ? 'bg-gray-400 cursor-not-allowed' : 'bg-black cursor-pointer'} px-3 py-1 rounded-full float-right text-white hover:bg-gray-800 duration-500 `}
+                <button onClick={(e)=>handleAddMulticityFlight(e)} className={`${multiCityFlights.length >= 5 ? 'bg-gray-400 cursor-not-allowed' : 'bg-black cursor-pointer'} px-3 py-1 rounded-full float-right text-white hover:bg-gray-800 duration-500 `}
                 disabled={multiCityFlights.length >= 5}
                 >+ Add Another City</button>
-            </div>
+              </div>
             }
         </div>
         

@@ -8,6 +8,7 @@ import FlightCard from '../components/FlightCard'
 import { AppContext } from '../context/appContent';
 import FlightCardTwoWay from './FlightCardTwoWay';
 import TabFilters from './TabFilters';
+import { RadioGroup } from '@headlessui/react'
 
 const DEMO_DATA = [
   {
@@ -68,16 +69,63 @@ const DEMO_DATA = [
   },
 ];
 
+const multiCityRadioCheckCardData = [
+  {
+    id: 1,
+    from: 'Delhi',
+    to: 'Mumbai',
+    date: 'Tue, 11 Feb 25',
+    timeFrom: '16:25',
+    timeTo: '23:50'
+  },
+  {
+    id: 2,
+    from: 'Bangalore',
+    to: 'Chennai',
+    date: 'Wed, 12 Feb 25',
+    timeFrom: '09:00',
+    timeTo: '11:30'
+  },
+  {
+    id: 3,
+    from: 'Kolkata',
+    to: 'Hyderabad',
+    date: 'Thu, 13 Feb 25',
+    timeFrom: '14:10',
+    timeTo: '17:45'
+  },
+];
+
+
 
 const Hero1 = () => {
 
   const {dropOffLocationType, setDropOffLocationType} = useContext(AppContext);
   const [selectedFlight, setSelectedFlight] = useState()
   const [selectedReturnFlight, setSelectedReturnFlight] = useState()
-  console.log(selectedReturnFlight)
+
+  const [selected, setSelected] = useState(multiCityRadioCheckCardData[0]) //multicity selected radio card
+  console.log(selected)
+  
+  // multicity radio card checkbox 
+  function CheckIcon(props) {
+    return (
+      <svg viewBox="0 0 24 24" fill="none" {...props}>
+        <circle cx={12} cy={12} r={12} fill="#fff" opacity="0.2" />
+        <path
+          d="M7 13l3 3 7-7"
+          stroke="#fff"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
 
   const renderOneWayCard = () => {
     return (
+      <>
       <div className="lg:p-10 lg:bg-neutral-50 lg:dark:bg-black/20 grid grid-cols-1 gap-6  rounded-3xl">
         {DEMO_DATA.map((item, index) => (
           <FlightCard key={index} data={item} setSelectedFlight={setSelectedFlight}/>
@@ -87,6 +135,7 @@ const Hero1 = () => {
           <button className='px-4 py-2 bg-slate-200 cursor-pointer hover:bg-slate-300 duration-500 rounded-full' >Show more</button>
         </div>
       </div>
+      </>
     )
   }
 
@@ -111,11 +160,88 @@ const Hero1 = () => {
           <div className="flex mt-12 justify-center items-center">
             <button className='px-4 py-2 bg-slate-200 cursor-pointer hover:bg-slate-300 duration-500 rounded-full' >Show more</button>
           </div>
-      </div>
+        </div>
       </div>
       
     )
   }
+
+  const renderMultiCityCard = () => {
+    return (
+      <>
+      <div className="w-full px-4 py-8">
+        <div className="w-full">
+          <RadioGroup value={selected} onChange={setSelected}>
+            <RadioGroup.Label className="sr-only">Server size</RadioGroup.Label>
+            <div className="space-y-2 gap-3 grid grid-cols-5 ">
+              {multiCityRadioCheckCardData.map((item) => (
+                <RadioGroup.Option
+                  key={item.id}
+                  value={item}
+                  className={({ active, checked }) =>
+                    `${
+                      active
+                        ? 'ring-2 ring-white/60 ring-offset-2 ring-offset-sky-300'
+                        : ''
+                    }
+                    ${checked ? 'bg-gray-900 text-white' : 'bg-white'}
+                      relative flex cursor-pointer border border-gray-200 rounded-lg px-5 py-4 shadow-md focus:outline-none`
+                  }
+                >
+                  {({ active, checked }) => (
+                    <>
+                      <div className="flex w-full items-center justify-between">
+                        <div className="flex items-center">
+                          <div className="text-sm">
+                            <RadioGroup.Label
+                              as="p"
+                              className={`font-medium  ${
+                                checked ? 'text-white' : 'text-gray-900'
+                              }`}
+                            >
+                              {item.from} - {item.to}
+                            </RadioGroup.Label>
+                            <RadioGroup.Description
+                              as="span"
+                              className={`inline ${
+                                checked ? 'text-sky-100' : 'text-gray-500'
+                              }`}
+                            >
+                              <p>
+                                {item.date}
+                              </p>{' '}
+                              <p>{item.timeFrom} - {item.timeTo}</p>
+                            </RadioGroup.Description>
+                          </div>
+                        </div>
+                        {checked && (
+                          <div className="shrink-0 text-white">
+                            <CheckIcon className="h-6 w-6" />
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </RadioGroup.Option>
+              ))}
+            </div>
+          </RadioGroup>
+        </div>
+      </div>
+      {/* ---------------------------- */}
+      <div className="lg:p-10 lg:bg-neutral-50 lg:dark:bg-black/20 grid grid-cols-1 gap-6  rounded-3xl">
+        {DEMO_DATA.map((item, index) => (
+          <FlightCard key={index} data={item} setSelectedFlight={setSelectedFlight}/>
+        ))}
+
+        <div className="flex mt-12 justify-center items-center">
+          <button className='px-4 py-2 bg-slate-200 cursor-pointer hover:bg-slate-300 duration-500 rounded-full' >Show more</button>
+        </div>
+      </div>
+      </>
+    )
+  }
+
 
   return (
     <div className='container mx-auto p-5 sm:p-0'>
@@ -156,7 +282,11 @@ const Hero1 = () => {
         {/* flight list  */}
         <div className='mt-5'>
           {
-            dropOffLocationType == 'oneWay' ? renderOneWayCard() : renderRoundTripCard()
+            dropOffLocationType == 'oneWay' 
+            ? renderOneWayCard() 
+            : dropOffLocationType == 'roundTrip' 
+            ? renderRoundTripCard() 
+            : renderMultiCityCard()
           }
         </div>
 
