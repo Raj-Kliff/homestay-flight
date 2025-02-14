@@ -2,78 +2,31 @@
 // import { FaArrowRightLong, IoChevronDownOutline } from '@heroicons/react/24/outline'
 import { IoChevronDownOutline } from "react-icons/io5";
 import { FaArrowRightLong } from "react-icons/fa6";
-import React, { FC, useState } from 'react'
+import React, { FC, useState, useContext } from 'react'
+import { getHoursFromISO, calculateHourDifference, fullDate, encryptId } from '../helpers/comm';
+import FlightDetails from './FlightDetails'
+import { Link } from "react-router-dom";
+import { AppContext } from '../Context/appContext'
 
-
-const FlightCard = ({ className = '', data, setSelectedFlight }) => {
+const FlightCard = ({ className = '', data, res_index = null }) => {
+  const { dropOffLocationType } = useContext(AppContext)
   const [isOpen, setIsOpen] = useState(false)
-  
+  const { Fare, Segments, TicketAdvisory } = data;
+  const _segments = Segments.flat();
 
-
-  const renderDetailTop = () => {
-    return (
-      <div>
-        <div className="flex flex-col md:flex-row">
-          <div className="w-24 flex-shrink-0 md:w-20 md:pt-7 lg:w-24">
-            <img
-              src={data.airlines.logo}
-              className="w-10"
-              alt=""
-              sizes="40px"
-              width={40}
-              height={40}
-            />
-          </div>
-          <div className="my-5 flex md:my-0">
-            <div className="flex flex-shrink-0 flex-col items-center py-2">
-              <span className="block h-6 w-6 rounded-full border border-neutral-400"></span>
-              <span className="my-1 block flex-grow border-l border-dashed border-neutral-400"></span>
-              <span className="block h-6 w-6 rounded-full border border-neutral-400"></span>
-            </div>
-            <div className="ml-4 space-y-10 text-sm">
-              <div className="flex flex-col space-y-1">
-                <span className="text-neutral-500 dark:text-neutral-400">
-                  Monday, August 12 · 10:00
-                </span>
-                <span className="font-semibold">
-                  Tokyo International Airport (HND)
-                </span>
-              </div>
-              <div className="flex flex-col space-y-1">
-                <span className="text-neutral-500 dark:text-neutral-400">
-                  Monday, August 16 · 10:00
-                </span>
-                <span className="font-semibold">
-                  Singapore International Airport (SIN)
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="border-l border-neutral-200 dark:border-neutral-700 md:mx-6 lg:mx-10"></div>
-          <ul className="space-y-1 text-sm text-neutral-500 dark:text-neutral-400 md:space-y-2">
-            <li>Trip time: 7 hours 45 minutes</li>
-            <li>ANA · Business class · Boeing 787 · NH 847</li>
-          </ul>
-        </div>
-      </div>
-    )
-  }
-
-  const renderDetail = (data) => {
+  const renderDetail = () => {
     if (!isOpen) return null
+    const encrypted = encryptId(res_index);
+    const journeyType = encryptId(dropOffLocationType);
     return (
-      <div className="rounded-2xl border border-neutral-200 p-4 dark:border-neutral-700 md:p-8">
-        {renderDetailTop()}
-        <div className="my-7 space-y-5 md:my-10 md:pl-24">
-          <div className="border-t border-neutral-200 dark:border-neutral-700" />
-          <div className="text-sm text-neutral-700 dark:text-neutral-300 md:text-base">
-            Transit time: 15 hours 45 minutes - Bangkok (BKK)
-          </div>
-          <div className="border-t border-neutral-200 dark:border-neutral-700" />
+      <>
+        <div className="rounded-2xl border border-neutral-200 p-4 dark:border-neutral-700 md:p-8">
+          {_segments?.map((ele, index) => {
+            return <FlightDetails key={index} params={ele} res_index={res_index} local_index={index} />
+          })}
+          {res_index != null ? <Link to={`/booking/${encrypted}`} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Book Flight</Link> : "No data found"}
         </div>
-        {renderDetailTop()}
-        <button onClick={()=>setSelectedFlight(data)} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Select</button>
-      </div>
+      </>
     )
   }
 
@@ -86,9 +39,8 @@ const FlightCard = ({ className = '', data, setSelectedFlight }) => {
         <a href="##" className="absolute inset-0" />
 
         <span
-          className={`absolute bottom-0 right-0 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-neutral-50 dark:bg-neutral-800 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 ${
-            isOpen ? '-rotate-180 transform' : ''
-          }`}
+          className={`absolute bottom-0 right-0 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-neutral-50 dark:bg-neutral-800 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 ${isOpen ? '-rotate-180 transform' : ''
+            }`}
           onClick={() => setIsOpen(!isOpen)}
         >
           <IoChevronDownOutline className="h-5 w-5" />
@@ -98,7 +50,9 @@ const FlightCard = ({ className = '', data, setSelectedFlight }) => {
           {/* LOGO IMG */}
           <div className="w-24  lg:w-32">
             <img
-              src={data.airlines.logo}
+              src={
+                `https://www.gstatic.com/flights/airline_logos/70px/${_segments[0].Airline.AirlineCode}.png`
+              }
               width={40}
               height={40}
               className="w-10"
@@ -111,71 +65,71 @@ const FlightCard = ({ className = '', data, setSelectedFlight }) => {
           <div className="block space-y-1 lg:hidden">
             <div className="flex font-semibold">
               <div>
-                <span>11:00</span>
+                <span>{getHoursFromISO(_segments[0].Origin.DepTime)}</span>
                 <span className="mt-0.5 flex items-center text-sm font-normal text-neutral-500">
-                  HND
+                  {_segments[0].Origin.Airport.AirportCode}
                 </span>
               </div>
               <span className="flex w-12 justify-center">
                 <FaArrowRightLong className="h-5 w-5" />
               </span>
               <div>
-                <span>20:00</span>
+                <span>{getHoursFromISO(_segments[0].Destination.ArrTime)}</span>
                 <span className="mt-0.5 flex items-center text-sm font-normal text-neutral-500">
-                  SIN
+                  {_segments[0].Destination.Airport.AirportCode}
                 </span>
               </div>
             </div>
 
             <div className="mt-0.5 text-sm font-normal text-neutral-500">
-              <span className="VG3hNb">Nonstop</span>
+              <span className="VG3hNb">{_segments[0].length == 1 ? 'Non-Stop' : 'Multi Stops'}</span>
               <span className="mx-2">·</span>
-              <span>7h 45m</span>
+              <span>{calculateHourDifference(_segments[0].Origin.DepTime, _segments[0].Destination.ArrTime)}</span>
               <span className="mx-2">·</span>
-              <span>HAN</span>
+              <span>{_segments[0].Destination.Airport.AirportCode}</span>
             </div>
           </div>
 
           {/* TIME - NAME */}
           <div className="hidden min-w-[150px] flex-[4] lg:block">
-            <div className="text-lg font-medium">11:00 - 20:00</div>
+            <div className="text-lg font-medium">{getHoursFromISO(_segments[0].Origin.DepTime)} - {getHoursFromISO(_segments[0].Destination.ArrTime)}</div>
             <div className="mt-0.5 text-sm font-normal text-neutral-500">
-              {data.airlines.name}
+              {_segments[0].Airline.AirlineName}
             </div>
           </div>
 
           {/* TIME */}
           <div className="hidden flex-[4] whitespace-nowrap lg:block">
-            <div className="text-lg font-medium">HND - SIN</div>
+            <div className="text-lg font-medium">{_segments[0].Origin.Airport.AirportCode} - {_segments[0].Destination.Airport.AirportCode}</div>
             <div className="mt-0.5 text-sm font-normal text-neutral-500">
-              7 hours 15 minutes
+              {calculateHourDifference(_segments[0].Origin.DepTime, _segments[0].Destination.ArrTime)}
             </div>
           </div>
 
           {/* TYPE */}
           <div className="hidden flex-[4] whitespace-nowrap lg:block">
-            <div className="text-lg font-medium">1 stop</div>
-            <div className="mt-0.5 text-sm font-normal text-neutral-500">
-              2 hours 15 minutes BKK
-            </div>
+            <div className="text-lg font-medium">{_segments.length} stop</div>
+            {/* <div className="mt-0.5 text-sm font-normal text-neutral-500">
+              {_segments.length > 1 ? <>2 hours 15 minutes BKK</> : null}
+            </div> */}
           </div>
 
           {/* PRICE */}
           <div className="flex-[4] whitespace-nowrap sm:text-right">
             <div>
               <span className="text-secondary-600 text-xl font-semibold">
-                {data.price}
+                {Fare.Currency} {(Fare.BaseFare + Fare.Tax)}
               </span>
             </div>
             <div className="mt-0.5 text-xs font-normal text-neutral-500 sm:text-sm">
-              round-trip
+              {_segments.length > 1 ? 'Connecting' : 'Direct'}
             </div>
           </div>
         </div>
       </div>
 
       {/* DETAIL */}
-      {renderDetail(data)}
+      {renderDetail()}
     </div>
   )
 }

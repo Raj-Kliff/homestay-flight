@@ -1,12 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { FaArrowRightLong } from "react-icons/fa6";
 import { IoChevronDownOutline } from "react-icons/io5";
 import { FaPlaneDeparture } from "react-icons/fa";
 import { FaPlaneArrival } from "react-icons/fa6";
 import { flight_assets } from "../assets/assets";
-
+import { useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Disclosure } from "@headlessui/react";
 import { ChevronUpIcon } from "@heroicons/react/20/solid";
+import { axios_instance } from '../Helpers/axios_hook.js';
+import { AppContext } from '../context/appContext';
+import RazorPay from "../components/RazorPay.jsx";
 
 const months = [
   "January",
@@ -32,17 +36,30 @@ const banks = [
 ];
 
 const wallet = [
-    "Adyen",
-    "Airtel Money",
-    "AlliedWallet",
-    "Apple Pay",
-    "Brinks",
-    "CardFree"
-  ];
-  
+  "Adyen",
+  "Airtel Money",
+  "AlliedWallet",
+  "Apple Pay",
+  "Brinks",
+  "CardFree"
+];
+
 
 const Payment = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [loading, setLoading] = useState(true); // Track loading state
+  const [result, setresult] = useState({});
+  const { setapi_error } = useContext(AppContext)
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const [currency, setCurrency] = useState(""); // Track loading state
+  const [Passengers, setPassengers] = useState([]); // Track loading state
+  const [BookingStatus, setBookingStatus] = useState(""); // Track loading state
+  const [BookingPrice, setBookingPrice] = useState(""); // Track loading state
+
+  const [name, setName] = useState(""); // Track loading state
+  const [email, setEmail] = useState(""); // Track loading state
+  const [contact, setContact] = useState(""); // Track loading state
 
   const renderDebitCard = () => {
     return (
@@ -346,7 +363,7 @@ const Payment = () => {
                       </div>
                     </>
                   </div>
-                  <br/>
+                  <br />
                   <div>
                     <div>
                       <label className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
@@ -507,6 +524,38 @@ const Payment = () => {
     );
   };
 
+  const getRecords = async () => {
+    try {
+      await axios_instance.get(`/flights/select/${id}`).then((response) => {
+        if (response.status === 200) {
+          if (typeof (response.data) === "string") {
+            setapi_error(response.data);
+          } else {
+            const { PreferredCurrency, Passengers, BookingStatus, BookingPrice } = response.data;
+            setCurrency(PreferredCurrency);
+            setPassengers(Passengers);
+            setBookingStatus(BookingStatus);
+            setBookingPrice(BookingPrice);
+            console.log(Passengers[0])
+            const full_name = `${Passengers[0].title} ${Passengers[0].firstname} ${Passengers[0].lastname}`;
+            setName(full_name);
+            setEmail(Passengers[0].email)
+            setContact(Passengers[0].contactNumber)
+          }
+        }
+      }).finally(() => {
+        setLoading(false); // Disable button & show loading effect
+      });
+    } catch (error) {
+      console.warn("Error :- ", error);
+      setapi_error(error);
+    }
+  }
+
+  useEffect(() => {
+    getRecords()
+  }, [])
+
   return (
     <div>
       {/* backgroundImage */}
@@ -527,7 +576,8 @@ const Payment = () => {
                   </h2>
                   <div>
                     <div className="w-full">
-                      <div className="w-full rounded-2xl bg-white p-2">
+                      <RazorPay currency={currency} amount={BookingPrice} name={name} email={email} contact={contact} />
+                      {/* <div className="w-full rounded-2xl bg-white p-2">
                         <Disclosure>
                           {({ open }) => (
                             <>
@@ -599,7 +649,7 @@ const Payment = () => {
                             </>
                           )}
                         </Disclosure>
-                      </div>
+                      </div> */}
                     </div>
                   </div>
                 </div>
@@ -611,7 +661,7 @@ const Payment = () => {
             <div className="sticky top-28 pb-10">
               <div className="listingSectionSidebar__wrap shadow-xl p-4 border-1 rounded w-full flex flex-col sm:rounded-2xl border-b sm:border-t sm:border-l sm:border-r border-neutral-200 dark:border-neutral-700 space-y-6 sm:space-y-8 pb-10 sm:p-4 xl:p-8">
                 <h2 className="text-2xl font-semibold sm:text-lg lg:text-2xl mb-3">
-                    Booking Summary
+                  Booking Summary
                 </h2>
                 <div>
                   <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
@@ -623,7 +673,7 @@ const Payment = () => {
                         >
                           Flight Fare
                         </th>
-                        <td className="px-6 py-4 text-right">$2500</td>
+                        <td className="px-6 py-4 text-right">{currency}   {BookingPrice}</td>
                       </tr>
                       <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
@@ -633,7 +683,7 @@ const Payment = () => {
                           <p className="font-bold">Additional Baggage</p>
                           Additional 15kg
                         </th>
-                        <td className="px-6 py-4 text-right">+$25</td>
+                        <td className="px-6 py-4 text-right">0</td>
                       </tr>
                       <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
@@ -643,7 +693,7 @@ const Payment = () => {
                           <p className="font-bold">Inflight Meals</p>
                           Veg Meal X (1)
                         </th>
-                        <td className="px-6 py-4 text-right">+$18</td>
+                        <td className="px-6 py-4 text-right">0</td>
                       </tr>
                       <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
@@ -653,7 +703,7 @@ const Payment = () => {
                           <p className="font-bold">Inflight Meals</p>
                           Non-Veg Meal X (1)
                         </th>
-                        <td className="px-6 py-4 text-right">+$18</td>
+                        <td className="px-6 py-4 text-right">0</td>
                       </tr>
                       <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
@@ -663,7 +713,7 @@ const Payment = () => {
                           <p className="font-bold">Seats</p>
                           Seat(10D)
                         </th>
-                        <td className="px-6 py-4 text-right">+$5</td>
+                        <td className="px-6 py-4 text-right">0</td>
                       </tr>
                       <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
@@ -673,7 +723,7 @@ const Payment = () => {
                           Grand Total:
                         </th>
                         <td className="px-6 py-4 text-right text-xl font-leading">
-                          $2566
+                          {currency}   {BookingPrice}
                         </td>
                       </tr>
                     </tbody>

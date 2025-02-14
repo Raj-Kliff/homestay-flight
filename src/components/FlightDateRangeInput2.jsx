@@ -1,12 +1,12 @@
-import React, { useState, Fragment } from "react";
+import React, { useState, Fragment,useContext } from "react";
 import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { LuCalendarDays } from "react-icons/lu";
+import { AppContext } from '../Context/appContext'
 
 const FlightDateRangeInput2 = ({ hasButtonSubmit = false }) => {
-  const [startDate, setStartDate] = useState(new Date()); // default start date is today
-
+ const { start_date,setstart_date } = useContext(AppContext);
   const renderInput = () => {
     return (
       <>
@@ -15,8 +15,8 @@ const FlightDateRangeInput2 = ({ hasButtonSubmit = false }) => {
         </div>
         <div className="flex-grow text-left">
           <span className="block font-semibold xl:text-lg">
-            {startDate
-              ? startDate.toLocaleDateString("en-US", {
+            {start_date
+              ? start_date.toLocaleDateString("en-US", {
                   month: "short",
                   day: "2-digit",
                 })
@@ -43,47 +43,15 @@ const FlightDateRangeInput2 = ({ hasButtonSubmit = false }) => {
               <PopoverButton className="relative z-10 flex flex-1 items-center space-x-3 focus:outline-none">
                 {renderInput()}
 
-                {startDate && open && (
+                {/* {start_date && open && (
                   <button
-                    onClick={() => setStartDate(null)}
+                    onClick={() => setstart_date(null)}
                     className="text-red-500 bg-red-200 rounded-full cursor-pointer px-2 py-1 hover:text-red-700"
                   >
                     Clear
                   </button>
-                )}
+                )} */}
               </PopoverButton>
-
-              {/* BUTTON SUBMIT OF FORM */}
-              {/* <a
-                type="button"
-                className="flex h-14 mt-5 sm:mt-0 sm:ms-5 w-full items-center justify-center rounded-full bg-purple-500 text-white hover:bg-purple-600 focus:outline-none md:h-16 md:w-16"
-                href="#"
-              >
-                <span className="me-3 md:hidden">Search</span>
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  width="24"
-                  height="24"
-                  color="currentColor"
-                  fill="none"
-                  className="h-6 w-6"
-                >
-                  <path
-                    d="M17.5 17.5L22 22"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  ></path>
-                  <path
-                    d="M20 11C20 6.02944 15.9706 2 11 2C6.02944 2 2 6.02944 2 11C2 15.9706 6.02944 20 11 20C15.9706 20 20 15.9706 20 11Z"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linejoin="round"
-                  ></path>
-                </svg>
-              </a> */}
             </div>
 
             {open && (
@@ -99,14 +67,14 @@ const FlightDateRangeInput2 = ({ hasButtonSubmit = false }) => {
               leaveFrom="opacity-100 translate-y-0"
               leaveTo="opacity-0 translate-y-1"
             >
-              <PopoverPanel className="absolute left-1/2 top-full z-20 mt-3 w-screen max-w-sm -translate-x-1/2 transform px-4 sm:px-0 lg:max-w-3xl">
+              <PopoverPanel className="absolute right-0 top-full z-20 mt-3 w-fit transform px-4 sm:px-0 lg:max-w-3xl">
                 <div
-                  className="overflow-hidden mt-[2rem] rounded-3xl bg-white p-4 shadow-lg dark:bg-neutral-800"
+                  className="overflow-hidden border border-gray-100 rounded-3xl bg-white p-4 shadow-lg dark:bg-neutral-800"
                   style={{ width: "fit-content" }}
                 >
                   <DatePicker
-                    selected={startDate}
-                    onChange={(date) => setStartDate(date)} // Update only startDate
+                    selected={start_date}
+                    onChange={(date) => setstart_date(date)} // Update only startDate
                     monthsShown={1} // Show only one month
                     showPopperArrow={false}
                     inline

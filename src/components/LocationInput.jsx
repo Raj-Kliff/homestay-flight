@@ -1,8 +1,9 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useContext } from 'react'
 import { IoLocationOutline } from "react-icons/io5";
 import { LuClock4 } from "react-icons/lu";
+import { AppContext } from '../Context/appContext'
 
 const LocationInput = ({
   autoFocus = false,
@@ -11,6 +12,7 @@ const LocationInput = ({
   className = 'nc-flex-1.5',
   divHideVerticalLineClass = 'left-10 -right-0.5',
 }) => {
+  const { origin, setorigin, destination, setdestination } = useContext(AppContext);
   const containerRef = useRef(null)
   const inputRef = useRef(null)
 
@@ -24,15 +26,23 @@ const LocationInput = ({
   const handleBlur = () => {
     setIsFocused(false)
   }
-
   const handleSelectLocation = (item) => {
+    //console.log(item)
     setValue(item)
     setIsFocused(false)
   }
-
+  const handlechange = (item) => {
+    if (item.placeholder === 'Flying from') {
+      setorigin(item.value);
+    } else {
+      setdestination(item.value);
+    }
+    setValue(item.value)
+    setIsFocused(false)
+  }
   const renderRecentSearches = () => {
     return (
-      <>
+      <div>
         <h3 className="block mt-2 sm:mt-0 px-4 sm:px-8 font-semibold text-base sm:text-lg text-neutral-800 dark:text-neutral-100">
           Recent searches
         </h3>
@@ -57,7 +67,7 @@ const LocationInput = ({
             </span>
           ))}
         </div>
-      </>
+      </div>
     )
   }
 
@@ -91,9 +101,8 @@ const LocationInput = ({
     <div className={`relative flex ${className}`} ref={containerRef}>
       <div
         onClick={() => inputRef.current && inputRef.current.focus()}
-        className={`flex z-10 flex-1 relative [ nc-hero-field-padding ] flex-shrink-0 items-center space-x-3 cursor-pointer focus:outline-none text-left  ${
-          isFocused ? 'nc-hero-field-focused' : ''
-        }`}
+        className={`flex z-10 flex-1 relative [ nc-hero-field-padding ] flex-shrink-0 items-center space-x-3 cursor-pointer focus:outline-none text-left  ${isFocused ? 'nc-hero-field-focused' : ''
+          }`}
       >
         <div className="text-neutral-300 dark:text-neutral-400">
           <IoLocationOutline className="w-5 h-5 lg:w-7 lg:h-7" />
@@ -104,9 +113,7 @@ const LocationInput = ({
             placeholder={placeHolder}
             value={value}
             autoFocus={autoFocus}
-            onChange={(e) => {
-              setValue(e.currentTarget.value)
-            }}
+            onChange={(e) => handlechange(e.target)}
             ref={inputRef}
             onFocus={handleFocus}
             onBlur={handleBlur}
@@ -131,7 +138,7 @@ const LocationInput = ({
       )}
 
       {isFocused && (
-        <div className="absolute mt-[3rem] left-0 z-40 w-full min-w-[300px] sm:min-w-[500px] bg-white dark:bg-neutral-800 top-full py-3 sm:py-6 rounded-3xl shadow-xl max-h-96 overflow-y-auto">
+        <div className="absolute mt-[0rem] left-0 z-40 w-full min-w-[300px] sm:min-w-[500px] bg-white dark:bg-neutral-800 top-full py-3 sm:py-6 rounded-3xl shadow-xl max-h-96 overflow-y-auto">
           {value ? renderSearchValue() : renderRecentSearches()}
         </div>
       )}

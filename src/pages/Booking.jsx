@@ -1,30 +1,229 @@
-import React, { useState } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import { FaArrowRightLong } from "react-icons/fa6";
 import { IoChevronDownOutline } from "react-icons/io5";
 import { FaPlaneDeparture } from "react-icons/fa";
 import { FaPlaneArrival } from "react-icons/fa6";
 import { flight_assets } from "../assets/assets";
+import { useNavigate } from "react-router-dom";
+import { AppContext } from '../context/appContext';
+import { useParams } from "react-router-dom";
+import { axios_instance } from '../Helpers/axios_hook.js';
+import { nationalities } from '../helpers/nationalities';
 
-import { Disclosure } from "@headlessui/react";
-import { ChevronUpIcon, TrashIcon } from "@heroicons/react/20/solid";
+import { decryptId, getHoursFromISO, calculateHourDifference, formatDateTime, htmlToPlainText } from '../helpers/comm';
 
 const Booking = () => {
+  const { traceId, filteredFlights, filteredReturnFlights, filteredMltiFlights, Commision, dropOffLocationType, adult, child, infant, setapi_error } = useContext(AppContext)
 
   const [person, setPerson] = useState([1]);
+  const navigate = useNavigate();
+  const { id, type } = useParams();
+  const [loading, setLoading] = useState(true); // Track loading state
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [fareBreakdown, setfareBreakdown] = useState([]);
+  const [gSTAllowed, setgSTAllowed] = useState(false);
+  const [isLLC, setisLLC] = useState(false);
+  const [isPanRequiredAtBook, setsisPanRequiredAtBook] = useState(false);
+  const [isPanRequiredAtTicket, setisPanRequiredAtTicket] = useState(false);
+  const [isPassportFullDetailRequiredAtBook, setisPassportFullDetailRequiredAtBook] = useState(false);
+  const [isPassportRequiredAtBook, setisPassportRequiredAtBook] = useState(false);
+  const [isPassportRequiredAtTicket, setisPassportRequiredAtTicket] = useState(false);
+  const [isRefundable, setisRefundable] = useState(false);
+  const [segments, setsegments] = useState(null);
+  const [fareRules, setFareRules] = useState(null);
+  const [qoutes, setqoutes] = useState(null);
+  const [_currency, set_currency] = useState(null);
+  const [_PassengerCount, set_PassengerCount] = useState(0);
+  const [tax, settax] = useState(0);
+  const [grandTotal, setgrandTotal] = useState({});
+  const [insurance, setinsurance] = useState(25);
+
 
   const handleAddPerson = () => {
-    setPerson([...person, person.length+1])
+    setPerson([...person, person.length + 1])
   }
 
   const handleDeletePerson = (index) => {
-    const newPerson = person.filter((_,i) => i != index);
+    const newPerson = person.filter((_, i) => i != index);
     setPerson(newPerson)
   }
 
+  const getRules = async (itreation) => {
+    await axios_instance.post('/flights/fare', {
+      "traceId": traceId,
+      "ResultIndex": filteredFlights[itreation].ResultIndex
+    }).then((response) => {
+      if (response.status === 200 && typeof (response.data) != "string") {
+        setFareRules(htmlToPlainText(response.data.Response.FareRules[0].FareRuleDetail));
+      } else {
+        console.log(response);
+      }
+    }).finally(() => {
+      console.log("here");
+    });
+  }
+
+  const getQoutes = async (itreation) => {
+    await axios_instance.post('/flights/getFareQoute', {
+      "traceId": traceId,
+      "ResultIndex": filteredFlights[itreation].ResultIndex
+    }).then((response) => {
+      if (response.status === 200 && typeof (response.data) != "string") {
+        //console.log(response.data.Response.Results.FareBreakdown);
+        const _baseFare = response.data.Response.Results.FareBreakdown[0].BaseFare;
+        const _tax = response.data.Response.Results.FareBreakdown[0].Tax;
+        const _passengerCount = response.data.Response.Results.FareBreakdown[0].PassengerCount;
+        const _currency = response.data.Response.Results.FareBreakdown[0].Currency;
+        const price = (_baseFare + Commision + _tax) / _passengerCount;
+        setqoutes(price);
+        set_currency(_currency);
+        settax(_tax);
+        set_PassengerCount(_passengerCount);
+        setgrandTotal({ "price": price, "tax": _tax, "insurance": insurance, "convenienceFee": Commision });
+      } else {
+        console.log(response);
+      }
+    }).finally(() => {
+      console.log("FareQoutes call Done");
+    });
+  }
+
+  async function loadPolocy(paramsId) {
+    if (fareRules === null) {
+      await getRules(paramsId);
+    }
+    if (qoutes === null) {
+      await getQoutes(paramsId);
+    }
+  }
+
+  useEffect(() => {
+    const paramsId = decryptId(id);
+    // getting current itreation
+    const Ids = paramsId;
+    let result = null;
+    if (dropOffLocationType === 1) {
+      result = filteredFlights;
+    } else if (dropOffLocationType === 2) {
+      result = filteredReturnFlights;
+    } else if (dropOffLocationType === 3) {
+      result = filteredMltiFlights;
+    }
+    if (result != null) {
+      result.map((item, index) => {
+        if (index == Ids) {
+          // console.log(item.GSTAllowed)
+          const { FareBreakdown, Segments } = item
+          setfareBreakdown(FareBreakdown)
+          setgSTAllowed(item.GSTAllowed)
+          setisLLC(item.IsLCC)
+          setsisPanRequiredAtBook(item.IsPanRequiredAtBook)
+          setisPanRequiredAtTicket(item.IsPanRequiredAtTicket)
+          setisPassportFullDetailRequiredAtBook(item.IsPassportFullDetailRequiredAtBook)
+          setisPassportRequiredAtBook(item.IsPassportRequiredAtBook)
+          setisPassportRequiredAtTicket(item.IsPassportRequiredAtTicket)
+          setisRefundable(item.IsRefundable)
+          setsegments(Segments.flat())
+          setLoading(false); // Stop loading
+          //console.log(FareBreakdown)
+        }
+      });
+    } else {
+      navigate(`/`);
+    }
+    loadPolocy(Ids);
+
+    const totalGuests = adult + child + infant
+    console.log("totalGuests", totalGuests);
+    setPerson([totalGuests]);
+    console.log("person", person.length);
+
+  }, [])
+
+  // Function to get stored data
+  const getInitialData = () => ({
+    title: "",
+    email: "",
+    firstname: "",
+    lastname: "",
+    PaxType: "",
+    DateOfBirth: "",
+    Gender: "",
+    passportNumber: "",
+    passportExpiry: "",
+    city: "",
+    address1: "",
+    address2: "",
+    countryCode: "",
+    countryName: "",
+    nationality: "",
+    contactNumber: "",
+    leadPax: "",
+    gst_companyName: "",
+    gst_number: "",
+    gst_email: "",
+    gst_contact: "",
+    gst_address: ""
+  });
+  const [formData, setFormData] = useState(getInitialData);
+  // Handle input change
+  const handleChange = (e) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    });
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return; // Prevent multiple requests
+    setLoading(true); // Disable button & show loading effect
+    const post_data = {};
+    post_data.traceId = traceId;
+    post_data.ResultIndex = filteredFlights[0].ResultIndex;
+    post_data.PreferredCurrency = _currency;
+    post_data.Price = Object.values(grandTotal).reduce((acc, curr) => acc + curr, 0);
+    formData.Fare = {
+      BaseFare: fareBreakdown[0].BaseFare,
+      Tax: fareBreakdown[0].Tax,
+      YQTax: fareBreakdown[0].YQTax,
+      AdditionalTxnFeePub: fareBreakdown[0].AdditionalTxnFeePub,
+      AdditionalTxnFeeOfrd: fareBreakdown[0].AdditionalTxnFeeOfrd
+    };
+    post_data.Passengers = [formData];
+    try {
+      await axios_instance.post('/flights/selected', post_data).then((response) => {
+        if (response.status === 200) {
+          if (typeof (response.data) === "string") {
+            setapi_error(response.data);
+          } else {
+            const { id, data } = response.data;
+            navigate(`/payment/${id}`);
+          }
+        }
+      }).finally(() => {
+        setLoading(false); // Disable button & show loading effect
+      });
+    } catch (error) {
+      console.warn("Error :- ", error);
+      setapi_error(error);
+    }
+    console.log("Form Data Submitted:", post_data);
+  };
+  // console.log("before the page load ", segments);
+
+  // Show a loading message before data is ready
+  if (loading) return <p>Loading...</p>;
+  // Calculate total sum
+  const finalTotal = Object.values(grandTotal).reduce((acc, curr) => acc + curr, 0);
+
   const renderForm = () => {
+    // console.log("contries", contries);
+
     return (
       <>
-        <form action="#">
+        <form onSubmit={handleSubmit}>
           <div>
             <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr]">
               <div>
@@ -35,8 +234,9 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="Title"
+                  name="title"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
                   <option value="Mr">Mr.</option>
@@ -52,9 +252,10 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="FirstName"
+                  name="firstname"
                   id="firstname"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -65,14 +266,14 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="LastName"
+                  name="lastname"
                   id="lastname"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
             </div>
           </div>
-
           <div>
             <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr]">
               <div>
@@ -85,10 +286,12 @@ const Booking = () => {
                   id=""
                   name="PaxType"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
-                  <option value="">Type1</option>
-                  <option value="">Type2</option>
+                  <option value="1">Adult</option>
+                  <option value="2">Child</option>
+                  <option value="3">Infant</option>
                 </select>
               </div>
               <div>
@@ -101,6 +304,7 @@ const Booking = () => {
                   type="date"
                   name="DateOfBirth"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -113,19 +317,18 @@ const Booking = () => {
                   id=""
                   name="Gender"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
-                  <option value="">Male</option>
-                  <option value="">Female</option>
-                  <option value="">Other</option>
+                  <option value="1">Male</option>
+                  <option value="2">Female</option>
                 </select>
               </div>
             </div>
           </div>
-
           <div>
             <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr]">
-            <div>
+              {isLLC != null ? <> <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -133,22 +336,25 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="PassportNo"
+                  name="passportNumber"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Passport Expiry
-                </label>
-                <input
-                  type="date"
-                  name="PassportExpiry"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Passport Expiry
+                  </label>
+                  <input
+                    type="date"
+                    name="passportExpiry"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                    onChange={handleChange}
+                  />
+                </div></> : null}
+
               <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
@@ -157,20 +363,20 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="City"
+                  name="city"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
-                  <option value="">New Delhi</option>
-                  <option value="">Bahadurgarh</option>
+                  <option value="New Delhi">New Delhi</option>
+                  <option value="Bahadurgarh">Bahadurgarh</option>
                 </select>
-            </div>
+              </div>
             </div>
           </div>
-
           <div>
             <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr]">
-            <div>
+              <div>
                 <label
                   className="block text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -178,12 +384,13 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="AddressLine1"
+                  name="address1"
                   placeholder="Address line 1"
                   className="bg-gray-50 mt-2 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
-            <div>
+              <div>
                 <label
                   className="invisible text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -191,17 +398,17 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="AddressLine2"
+                  name="address2"
                   placeholder="Address line 2"
                   className="bg-gray-50 mt-1 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
             </div>
           </div>
-
           <div>
             <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr]">
-            <div>
+              <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -209,15 +416,17 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="CountryCode"
+                  name="countryCode"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
-                  <option value="">IN</option>
-                  <option value="">US</option>
+                  {nationalities.map((ele, index) => (
+                    <option key={index} value={ele.alpha_3_code}>{ele.alpha_3_code}</option>
+                  ))}
                 </select>
-            </div>
-            <div>
+              </div>
+              <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -225,15 +434,17 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="CountryName"
+                  name="countryName"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
-                  <option value="">INDIA</option>
-                  <option value="">USA</option>
+                  {nationalities.map((ele, index) => (
+                    <option key={index} value={ele.en_short_name}>{ele.en_short_name}</option>
+                  ))}
                 </select>
-            </div>
-            <div>
+              </div>
+              <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -241,15 +452,17 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="Nationality"
+                  name="nationality"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
-                  <option value="">INDIAN</option>
-                  <option value="">AMERICAN</option>
+                  {nationalities.map((ele, index) => (
+                    <option key={index} value={ele.nationality}>{ele.nationality}</option>
+                  ))}
                 </select>
-            </div>
-            <div>
+              </div>
+              <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -257,11 +470,12 @@ const Booking = () => {
                 </label>
                 <input
                   type="number"
-                  name="ContactNo"
+                  name="contactNumber"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
-            <div>
+              <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -269,8 +483,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="email"
-                  name="Email"
+                  name="email"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -281,15 +496,16 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="IsLeadPax"
+                  name="leadPax"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
-                  <option value="">True</option>
-                  <option value="">False</option>
+                  <option value="true">True</option>
+                  <option value="false">False</option>
                 </select>
-            </div>
-            <div>
+              </div>
+              {/* <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -301,7 +517,7 @@ const Booking = () => {
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
                 />
               </div>
-            <div>
+              <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
                 >
@@ -312,90 +528,11 @@ const Booking = () => {
                   name="FFNumber"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
                 />
-              </div>
+              </div> */}
             </div>
           </div>
-
-          <div>
-            <h5 className="font-bold pt-5 mb-5">Fare <hr/></h5>
-            <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Base Fare
-                </label>
-                <input
-                  type="number"
-                  name="BaseFare"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Tax
-                </label>
-                <input
-                  type="number"
-                  name="Tax"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  YQ Tax
-                </label>
-                <input
-                  type="number"
-                  name="YQTax"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Additional Txn Fee Pub
-                </label>
-                <input
-                  type="number"
-                  name="AdditionalTxnFeePub"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Additional Txn Fee Ofrd
-                </label>
-                <input
-                  type="number"
-                  name="AdditionalTxnFeeOfrd"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Other Charges
-                </label>
-                <input
-                  type="number"
-                  name="OtherCharges"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h5 className="font-bold pt-5 mb-5">Baggage <hr/></h5>
+          {isLLC ? null : <> <div>
+            <h5 className="font-bold pt-5 mb-5">Baggage <hr /></h5>
             <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
               <div>
                 <label
@@ -405,8 +542,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="AirlineCode"
+                  name="airlineCode"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -417,8 +555,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="number"
-                  name="FlightNumber"
+                  name="flightNumber"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -429,15 +568,16 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="WayType"
+                  name="wayType"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
                   <option value="0">NotSet</option>
                   <option value="1">Segment</option>
                   <option value="2">FullJourney</option>
                 </select>
-            </div>
+              </div>
               <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
@@ -446,8 +586,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="Code"
+                  name="code"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -458,8 +599,9 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="Description"
+                  name="description"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
                   <option value="0">NotSet</option>
@@ -469,7 +611,7 @@ const Booking = () => {
                   <option value="4">UpGrade</option>
                   <option value="5">ImportedUpgrade </option>
                 </select>
-            </div>
+              </div>
               <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
@@ -478,8 +620,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="number"
-                  name="Weight"
+                  name="weight"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -490,14 +633,15 @@ const Booking = () => {
                 </label>
                 <select
                   id=""
-                  name="WayType"
+                  name="currency"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 >
                   <option selected="">Choose</option>
                   <option value="0">INR</option>
                   <option value="1">USD</option>
                 </select>
-            </div>
+              </div>
               <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
@@ -506,8 +650,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="number"
-                  name="Price"
+                  name="bagged_price"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -518,8 +663,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="Origin"
+                  name="bagged_origin"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -530,567 +676,566 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="Destination"
+                  name="bagged_destination"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
                 />
               </div>
             </div>
           </div>
 
-          <div>
-            <h5 className="font-bold pt-5 mb-5">Meal Dynamic <hr/></h5>
-            <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Airline Code
-                </label>
-                <input
-                  type="text"
-                  name="AirlineCode"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
+            <div>
+              <h5 className="font-bold pt-5 mb-5">Meal Dynamic <hr /></h5>
+              <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Airline Code
+                  </label>
+                  <input
+                    type="text"
+                    name="meal_aitlineCode"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Flight Number
+                  </label>
+                  <input
+                    type="number"
+                    name="mail_flightNumber"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Way Type
+                  </label>
+                  <select
+                    id=""
+                    name="meal_wayType"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">NotSet</option>
+                    <option value="1">Segment</option>
+                    <option value="2">FullJourney</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Code
+                  </label>
+                  <input
+                    type="text"
+                    name="meal_code"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Description
+                  </label>
+                  <select
+                    id=""
+                    name="meal_description"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">NotSet</option>
+                    <option value="1">Included </option>
+                    <option value="2">Direct</option>
+                    <option value="3">Imported</option>
+                    <option value="4">UpGrade</option>
+                    <option value="5">ImportedUpgrade </option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    AirlineDescription
+                  </label>
+                  <select
+                    id=""
+                    name="meal_airlineDescription"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">NotSet</option>
+                    <option value="1">Included </option>
+                    <option value="2">Direct</option>
+                    <option value="3">Imported</option>
+                    <option value="4">UpGrade</option>
+                    <option value="5">ImportedUpgrade </option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Quantity
+                  </label>
+                  <input
+                    type="number"
+                    name="meal_quantity"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Currency
+                  </label>
+                  <select
+                    id=""
+                    name="meal_currency"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">INR</option>
+                    <option value="1">USD</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Price
+                  </label>
+                  <input
+                    type="number"
+                    name="meal_price"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Origin
+                  </label>
+                  <input
+                    type="text"
+                    name="meal_origin"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Destination
+                  </label>
+                  <input
+                    type="text"
+                    name="meal_description"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
               </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Flight Number
-                </label>
-                <input
-                  type="number"
-                  name="FlightNumber"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Way Type
-                </label>
-                <select
-                  id=""
-                  name="WayType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">NotSet</option>
-                  <option value="1">Segment</option>
-                  <option value="2">FullJourney</option>
-                </select>
             </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Code
-                </label>
-                <input
-                  type="text"
-                  name="Code"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Description
-                </label>
-                <select
-                  id=""
-                  name="Description"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">NotSet</option>
-                  <option value="1">Included </option>
-                  <option value="2">Direct</option>
-                  <option value="3">Imported</option>
-                  <option value="4">UpGrade</option>
-                  <option value="5">ImportedUpgrade </option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  AirlineDescription
-                </label>
-                <select
-                  id=""
-                  name="AirlineDescription"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">NotSet</option>
-                  <option value="1">Included </option>
-                  <option value="2">Direct</option>
-                  <option value="3">Imported</option>
-                  <option value="4">UpGrade</option>
-                  <option value="5">ImportedUpgrade </option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Quantity
-                </label>
-                <input
-                  type="number"
-                  name="Quantity"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Currency
-                </label>
-                <select
-                  id=""
-                  name="WayType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">INR</option>
-                  <option value="1">USD</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Price
-                </label>
-                <input
-                  type="number"
-                  name="Price"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Origin
-                </label>
-                <input
-                  type="text"
-                  name="Origin"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Destination
-                </label>
-                <input
-                  type="text"
-                  name="Destination"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-            </div>
-          </div>
 
+            <div>
+              <h5 className="font-bold pt-5 mb-5">Seat Dynamic <hr /></h5>
+              <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Airline Code
+                  </label>
+                  <input
+                    type="text"
+                    name="seat_aitlineCode"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Flight Number
+                  </label>
+                  <input
+                    type="number"
+                    name="seal_flightNumber"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Craft Type
+                  </label>
+                  <select
+                    id=""
+                    name="seat_craftType"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">NotSet</option>
+                    <option value="1">Segment</option>
+                    <option value="2">FullJourney</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Code
+                  </label>
+                  <input
+                    type="text"
+                    name="seat_code"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Description
+                  </label>
+                  <select
+                    id=""
+                    name="seat_description"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">NotSet</option>
+                    <option value="1">Included </option>
+                    <option value="2">Direct</option>
+                    <option value="3">Imported</option>
+                    <option value="4">UpGrade</option>
+                    <option value="5">ImportedUpgrade </option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Availablity Type
+                  </label>
+                  <select
+                    id=""
+                    name="seat_availablityType"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">Type 1</option>
+                    <option value="1">Type 2</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Row No
+                  </label>
+                  <input
+                    type="number"
+                    name="seat_rowNo"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Seat No
+                  </label>
+                  <input
+                    type="number"
+                    name="seat_seatNo"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Seat Type
+                  </label>
+                  <select
+                    id=""
+                    name="seat_seatType"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">NotSet</option>
+                    <option value="1">Segment</option>
+                    <option value="2">FullJourney</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Seat Way Type
+                  </label>
+                  <select
+                    id=""
+                    name="seat_seatWayType"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">NotSet</option>
+                    <option value="1">Segment</option>
+                    <option value="2">FullJourney</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Compartment
+                  </label>
+                  <select
+                    id=""
+                    name="seat_compartment"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">One</option>
+                    <option value="1">Two</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Deck
+                  </label>
+                  <select
+                    id=""
+                    name="seat_deck"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">One</option>
+                    <option value="1">Two</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Currency
+                  </label>
+                  <select
+                    id=""
+                    name="seat_currency"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">INR</option>
+                    <option value="1">USD</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Price
+                  </label>
+                  <input
+                    type="number"
+                    name="seat_price"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Origin
+                  </label>
+                  <input
+                    type="text"
+                    name="seat_origin"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Destination
+                  </label>
+                  <input
+                    type="text"
+                    name="seat_destination"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <div>
+              <h5 className="font-bold pt-5 mb-5">Special Services (Optional)<hr /></h5>
+              <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Airline Code
+                  </label>
+                  <input
+                    type="text"
+                    name="ssr_aitlineCode"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Flight Number
+                  </label>
+                  <input
+                    type="number"
+                    name="ssr_flightNumber"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Service Type
+                  </label>
+                  <select
+                    id=""
+                    name="ssr_serviceType"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">Type1</option>
+                    <option value="1">Type2</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Code
+                  </label>
+                  <input
+                    type="text"
+                    name="ssr_code"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Departure Time
+                  </label>
+                  <input
+                    type="date"
+                    name="ssr_departureTime"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Way Type
+                  </label>
+                  <select
+                    id=""
+                    name="ssr_wayType"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">NotSet</option>
+                    <option value="1">Included </option>
+                    <option value="2">Direct</option>
+                    <option value="3">Imported</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Text
+                  </label>
+                  <input
+                    type="text"
+                    name="ssr_text"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Currency
+                  </label>
+                  <select
+                    id=""
+                    name="ssr_currency"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  >
+                    <option selected="">Choose</option>
+                    <option value="0">INR</option>
+                    <option value="1">USD</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Price
+                  </label>
+                  <input
+                    type="number"
+                    name="ssr_price"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Origin
+                  </label>
+                  <input
+                    type="text"
+                    name="ssr_origin"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+                <div>
+                  <label
+                    className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+                  >
+                    Destination
+                  </label>
+                  <input
+                    type="text"
+                    name="ssr_destination"
+                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  />
+                </div>
+              </div>
+            </div>
+          </>}
           <div>
-            <h5 className="font-bold pt-5 mb-5">Seat Dynamic <hr/></h5>
-            <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Airline Code
-                </label>
-                <input
-                  type="text"
-                  name="AirlineCode"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Flight Number
-                </label>
-                <input
-                  type="number"
-                  name="FlightNumber"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Craft Type
-                </label>
-                <select
-                  id=""
-                  name="CraftType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">NotSet</option>
-                  <option value="1">Segment</option>
-                  <option value="2">FullJourney</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Code
-                </label>
-                <input
-                  type="text"
-                  name="Code"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Description
-                </label>
-                <select
-                  id=""
-                  name="Description"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">NotSet</option>
-                  <option value="1">Included </option>
-                  <option value="2">Direct</option>
-                  <option value="3">Imported</option>
-                  <option value="4">UpGrade</option>
-                  <option value="5">ImportedUpgrade </option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Availablity Type
-                </label>
-                <select
-                  id=""
-                  name="AvailablityType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">Type 1</option>
-                  <option value="1">Type 2</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Row No
-                </label>
-                <input
-                  type="number"
-                  name="RowNo"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Seat No
-                </label>
-                <input
-                  type="number"
-                  name="SeatNo"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Seat Type
-                </label>
-                <select
-                  id=""
-                  name="SeatType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">NotSet</option>
-                  <option value="1">Segment</option>
-                  <option value="2">FullJourney</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Seat Way Type
-                </label>
-                <select
-                  id=""
-                  name="SeatWayType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">NotSet</option>
-                  <option value="1">Segment</option>
-                  <option value="2">FullJourney</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Compartment
-                </label>
-                <select
-                  id=""
-                  name="Compartment"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">One</option>
-                  <option value="1">Two</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Deck
-                </label>
-                <select
-                  id=""
-                  name="Deck"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">One</option>
-                  <option value="1">Two</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Currency
-                </label>
-                <select
-                  id=""
-                  name="WayType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">INR</option>
-                  <option value="1">USD</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Price
-                </label>
-                <input
-                  type="number"
-                  name="Price"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Origin
-                </label>
-                <input
-                  type="text"
-                  name="Origin"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Destination
-                </label>
-                <input
-                  type="text"
-                  name="Destination"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h5 className="font-bold pt-5 mb-5">Special Services <hr/></h5>
-            <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Airline Code
-                </label>
-                <input
-                  type="text"
-                  name="AirlineCode"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Flight Number
-                </label>
-                <input
-                  type="number"
-                  name="FlightNumber"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Service Type
-                </label>
-                <select
-                  id=""
-                  name="ServiceType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">Type1</option>
-                  <option value="1">Type2</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Code
-                </label>
-                <input
-                  type="text"
-                  name="Code"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Departure Time
-                </label>
-                <input
-                  type="date"
-                  name="DepartureTime"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Way Type
-                </label>
-                <select
-                  id=""
-                  name="WayType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">NotSet</option>
-                  <option value="1">Included </option>
-                  <option value="2">Direct</option>
-                  <option value="3">Imported</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Text
-                </label>
-                <input
-                  type="text"
-                  name="Text"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Currency
-                </label>
-                <select
-                  id=""
-                  name="WayType"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-500 focus:border-primary-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                >
-                  <option selected="">Choose</option>
-                  <option value="0">INR</option>
-                  <option value="1">USD</option>
-                </select>
-            </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Price
-                </label>
-                <input
-                  type="number"
-                  name="Price"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Origin
-                </label>
-                <input
-                  type="text"
-                  name="Origin"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-              <div>
-                <label
-                  className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-                >
-                  Destination
-                </label>
-                <input
-                  type="text"
-                  name="Destination"
-                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
-                />
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <h5 className="font-bold pt-5 mb-5">GST <hr/></h5>
+            <h5 className="font-bold pt-5 mb-5">GST <hr /></h5>
             <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
               <div>
                 <label
@@ -1100,8 +1245,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="GSTCompanyName"
+                  name="gst_companyName"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -1112,8 +1258,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="GSTNumber"
+                  name="gst_number"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -1124,8 +1271,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="email"
-                  name="GSTCompanyEmail"
+                  name="gst_email"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div>
@@ -1136,8 +1284,9 @@ const Booking = () => {
                 </label>
                 <input
                   type="number"
-                  name="GSTCompanyContactNumber"
+                  name="gst_contact"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
               <div className="col-span-4">
@@ -1148,13 +1297,13 @@ const Booking = () => {
                 </label>
                 <input
                   type="text"
-                  name="GSTCompanyAddress"
+                  name="gst_address"
                   className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary-600 focus:border-primary-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-primary-500 dark:focus:border-primary-500"
+                  onChange={handleChange}
                 />
               </div>
             </div>
           </div>
-
         </form>
       </>
     );
@@ -1181,56 +1330,56 @@ const Booking = () => {
                   <div className="flex flex-col space-y-6 sm:flex-row sm:items-center sm:space-y-0">
                     {/* LOGO IMG */}
                     <div className="w-24  lg:w-32">
-                      <img
+                      {segments ? <img
                         src={
-                          "https://www.gstatic.com/flights/airline_logos/70px/SQ.png"
+                          `https://www.gstatic.com/flights/airline_logos/70px/${segments[0].Airline.AirlineCode}.png`
                         }
                         width={60}
                         height={60}
                         className="w-10"
-                        alt="air-logo"
+                        alt={segments[0].Airline.AirlineName}
                         sizes="40px"
-                      />
+                      /> : <p>Loading...</p>}
                     </div>
 
                     {/* FOR MOBILE RESPONSIVE */}
                     <div className="block space-y-1 lg:hidden">
                       <div className="flex font-semibold">
                         <div>
-                          <span>11:00</span>
+                          <span>{getHoursFromISO(segments[0].Origin.DepTime)}</span>
                           <span className="mt-0.5 flex items-center text-sm font-normal text-neutral-500">
-                            HND
+                            {segments[0].Origin.Airport.AirportCode}
                           </span>
                         </div>
                         <span className="flex w-12 justify-center">
                           <FaArrowRightLong className="h-5 w-5" />
                         </span>
                         <div>
-                          <span>20:00</span>
+                          <span>{getHoursFromISO(segments[0].Destination.ArrTime)}</span>
                           <span className="mt-0.5 flex items-center text-sm font-normal text-neutral-500">
-                            SIN
+                            {segments[0].Destination.Airport.AirportCode}
                           </span>
                         </div>
                       </div>
 
                       <div className="mt-0.5 text-sm font-normal text-neutral-500">
-                        <span className="VG3hNb">Nonstop</span>
+                        <span className="VG3hNb">{segments.length}</span>
                         <span className="mx-2">·</span>
-                        <span>7h 45m</span>
+                        <span>{calculateHourDifference(segments[0].Origin.DepTime, segments[0].Destination.ArrTime)}</span>
                         <span className="mx-2">·</span>
-                        <span>HAN</span>
+                        <span>{segments[0].Destination.Airport.AirportCode}</span>
                       </div>
                     </div>
 
                     <div className="hidden min-w-[150px] flex-[4] lg:block">
-                      <div className="text-lg font-medium">Vistara</div>
+                      <div className="text-lg font-medium">{segments[0].Airline.AirlineName}</div>
                     </div>
 
                     {/* TIME */}
                     <div className="hidden flex-[4] whitespace-nowrap lg:block">
-                      <div className="text-lg font-medium">DXB 17.00 </div>
+                      <div className="text-lg font-medium">{segments[0].Origin.Airport.AirportCode} {getHoursFromISO(segments[0].Origin.DepTime)} </div>
                       <div className="mt-0.5 text-sm font-normal text-neutral-500">
-                        sat, 12 oct 2023
+                        {formatDateTime(segments[0].Origin.DepTime)}
                       </div>
                     </div>
 
@@ -1246,9 +1395,9 @@ const Booking = () => {
 
                     {/* TYPE */}
                     <div className="hidden flex-[4] whitespace-nowrap lg:block">
-                      <div className="text-lg font-medium">CDG 17.00</div>
+                      <div className="text-lg font-medium">{segments[0].Destination.Airport.AirportCode} {getHoursFromISO(segments[0].Destination.ArrTime)}</div>
                       <div className="mt-0.5 text-sm font-normal text-neutral-500">
-                        sat, 12 oct 2023
+                        {formatDateTime(segments[0].Destination.ArrTime)}
                       </div>
                     </div>
 
@@ -1256,11 +1405,11 @@ const Booking = () => {
                     <div className="flex-[4] whitespace-nowrap sm:text-right">
                       <div className="text-left">
                         <div className="text-secondary-600 text-xl font-semibold">
-                          20h 45m
+                          {calculateHourDifference(segments[0].Origin.DepTime, segments[0].Destination.ArrTime)}
                         </div>
                       </div>
                       <div className="mt-0.5 text-xs font-normal text-left text-neutral-500 sm:text-sm">
-                        1 stop
+                        {segments.length} stop
                       </div>
                     </div>
                   </div>
@@ -1285,17 +1434,13 @@ const Booking = () => {
                       </p>
                     </div>
                     <div className="mt-3">
-                      <h5 className="font-bold mb-3">Reschedule Charges</h5>
-                      <p>Airline fee : $2012</p>
-                      <p>
-                        This airline allows reschedule only before 2 hrs from
-                        departure time.
-                      </p>
+                      <h5 className="font-bold mb-3">Fare Rules</h5>
+                      {fareRules ? <p>{fareRules}</p> : <p>Loading...</p>}
                     </div>
                     <div className="mt-3">
                       <h5 className="font-bold mb-3">Baggage Policy</h5>
-                      <p>Check-in Baggage : 15 kg</p>
-                      <p>Cabin Baggage: 7 kg</p>
+                      <p>Check-in Baggage : {segments ? <p>{segments[0].Baggage}</p> : <p>Loading...</p>}</p>
+                      <p>Cabin Baggage: {segments ? <p>{segments[0].CabinBaggage}</p> : <p>Loading...</p>}</p>
                     </div>
                   </div>
                 </div>
@@ -1309,24 +1454,44 @@ const Booking = () => {
                   <h2 className="text-2xl font-semibold sm:text-lg lg:text-2xl mb-5">
                     Traveller Details
                   </h2>
-                  {
-                    person.map((_, index)=>(
-                      <div className="text-neutral-600 dark:text-neutral-300">
-                        <h5 className="mb-3 bg-black text-white rounded p-2 flex justify-between"><span>Person {index+1}</span> {person.length > 1 && (<TrashIcon onClick={()=>handleDeletePerson(index)} className="h-5 w-5 mr-2 text-red-600 hover:text-red-500 duration-500 cursor-pointer" />)}</h5>
-                        {renderForm()}
-                        <br/><br/>
-                      </div>
-                    ))
-                  }
-                  <div>
-                    <button onClick={()=>handleAddPerson()} className="bg-black px-4 py-2 rounded text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">+ Add More People</button>
-                  </div>
+                  <form onSubmit={handleSubmit}>
+                    {
+                      person.map((_, index) => (
+                        <div className="text-neutral-600 dark:text-neutral-300">
+                          <h5 className="mb-3 bg-black text-white rounded p-2 flex justify-between"><span>Person {index + 1}</span> {person.length > 1 && (<TrashIcon onClick={() => handleDeletePerson(index)} className="h-5 w-5 mr-2 text-red-600 hover:text-red-500 duration-500 cursor-pointer" />)}</h5>
+                          {renderForm()}
+                          <br /><br />
+                        </div>
+                      ))
+                    }
+                    <button
+                      disabled={loading}
+                      type="submit"
+                      className="bg-black px-4 py-2 rounded text-white float-right hover:bg-gray-800 duration-500 cursor-pointer"
+                    >
+                      {loading ? <>
+                        <div role="status">
+                          <svg aria-hidden="true" className="inline w-8 h-8 text-gray-200 animate-spin dark:text-gray-600 fill-gray-600 dark:fill-gray-300" viewBox="0 0 100 101" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M100 50.5908C100 78.2051 77.6142 100.591 50 100.591C22.3858 100.591 0 78.2051 0 50.5908C0 22.9766 22.3858 0.59082 50 0.59082C77.6142 0.59082 100 22.9766 100 50.5908ZM9.08144 50.5908C9.08144 73.1895 27.4013 91.5094 50 91.5094C72.5987 91.5094 90.9186 73.1895 90.9186 50.5908C90.9186 27.9921 72.5987 9.67226 50 9.67226C27.4013 9.67226 9.08144 27.9921 9.08144 50.5908Z" fill="currentColor" />
+                            <path d="M93.9676 39.0409C96.393 38.4038 97.8624 35.9116 97.0079 33.5539C95.2932 28.8227 92.871 24.3692 89.8167 20.348C85.8452 15.1192 80.8826 10.7238 75.2124 7.41289C69.5422 4.10194 63.2754 1.94025 56.7698 1.05124C51.7666 0.367541 46.6976 0.446843 41.7345 1.27873C39.2613 1.69328 37.813 4.19778 38.4501 6.62326C39.0873 9.04874 41.5694 10.4717 44.0505 10.1071C47.8511 9.54855 51.7191 9.52689 55.5402 10.0491C60.8642 10.7766 65.9928 12.5457 70.6331 15.2552C75.2735 17.9648 79.3347 21.5619 82.5849 25.841C84.9175 28.9121 86.7997 32.2913 88.1811 35.8758C89.083 38.2158 91.5421 39.6781 93.9676 39.0409Z" fill="currentFill" />
+                          </svg>
+                          <span className="sr-only">Loading...</span>
+                        </div></> : <>
+                        Continue Booking
+                      </>
+                      }
+
+                    </button>
+                  </form>
+                  {/* <div>
+                    <button onClick={() => handleAddPerson()} className="bg-black px-4 py-2 rounded text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">+ Add More People</button>
+                  </div> */}
                 </div>
               </div>
             </div>
 
             {/* Tavel Insurance */}
-            <div className="listingSection__wrap !space-y-6">
+            {/* <div className="listingSection__wrap !space-y-6">
               <div>
                 <div className={`relative sm:pr-20`}>
                   <h2 className="text-2xl font-semibold sm:text-lg lg:text-2xl mb-3">
@@ -1380,16 +1545,16 @@ const Booking = () => {
                   </div>
                 </div>
               </div>
-            </div>
+            </div> */}
 
-            <div>
+            {/* <div>
               <button
                 type="submit"
                 className="bg-black px-4 py-2 rounded text-white float-right hover:bg-gray-800 duration-500 cursor-pointer"
               >
                 Continue Booking
               </button>
-            </div>
+            </div> */}
           </div>
 
           <div className="mt-14 flex-grow lg:mt-0 p-5 sm:p-0">
@@ -1399,53 +1564,53 @@ const Booking = () => {
                   Travel Insurance
                 </h2>
                 <div>
-                  <table className="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
+                  <table class="w-full text-sm text-left rtl:text-right text-gray-500 dark:text-gray-400">
                     <tbody>
-                      <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
+                      <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
                           scope="row"
-                          className="px-6 ps-0 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white"
+                          class="px-6 ps-0 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white"
                         >
-                          Adults (3 X $2501)
+                          Adults ({_PassengerCount || "Loading..."} X  {qoutes || "Loading..."})
                         </th>
-                        <td className="px-6 py-4 text-right">$250</td>
+                        <td class="px-6 py-4 text-right"> {_currency || "Loading..."} {qoutes || "Loading..."}</td>
                       </tr>
-                      <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
+                      <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
                           scope="row"
-                          className="px-6 ps-0 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white"
+                          class="px-6 ps-0 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white"
                         >
                           Total Taxes
                         </th>
-                        <td className="px-6 py-4 text-right">$25</td>
+                        <td class="px-6 py-4 text-right">{_currency || "Loading..."} {tax || "Loading..."}</td>
                       </tr>
-                      <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
+                      <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
                           scope="row"
-                          className="px-6 ps-0 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white"
+                          class="px-6 ps-0 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white"
                         >
                           Insurance
                         </th>
-                        <td className="px-6 py-4 text-right">$25</td>
+                        <td class="px-6 py-4 text-right">{_currency || "Loading..."} {insurance || "Loading..."}</td>
                       </tr>
-                      <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
+                      <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
                           scope="row"
-                          className="px-6 ps-0 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white"
+                          class="px-6 ps-0 py-4 font-medium text-gray-900 whitespace-nowrap dark:text-white"
                         >
                           Convenience fee
                         </th>
-                        <td className="px-6 py-4 text-right">$25</td>
+                        <td class="px-6 py-4 text-right">{_currency || "Loading..."} {Commision}</td>
                       </tr>
-                      <tr className="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
+                      <tr class="bg-white border-b dark:bg-gray-800 dark:border-gray-700 border-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600">
                         <th
                           scope="row"
-                          className="px-6 ps-0 py-4 font-leading text-xl text-gray-900 whitespace-nowrap dark:text-white"
+                          class="px-6 ps-0 py-4 font-leading text-xl text-gray-900 whitespace-nowrap dark:text-white"
                         >
                           Grand Total:
                         </th>
-                        <td className="px-6 py-4 text-right text-xl font-leading">
-                          $250
+                        <td class="px-6 py-4 text-right text-xl font-leading">
+                          {_currency || "Loading..."} {finalTotal}
                         </td>
                       </tr>
                     </tbody>

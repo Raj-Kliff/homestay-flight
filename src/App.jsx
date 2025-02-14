@@ -10,16 +10,16 @@ function App() {
 
   return (
     <>
-    <BrowserRouter>
-      <Routes>
-        <Route path='/' element={<Home/>} />
-        <Route path='/booking' element={<Booking/>} />
-        <Route path='/payment' element={<Payment/>} />
-        <Route path='/booking-success' element={<BookingSuccess/>} />
-        <Route path='/booking-failure' element={<BookingFailure/>} />
-        <Route path='/booking-adons' element={<BookingAdons/>} />
-      </Routes>
-    </BrowserRouter>
+      <BrowserRouter>
+        <Routes>
+          <Route path='/' element={<Home />} />
+          <Route path='/booking/:id' element={<Booking />} />
+          <Route path='/payment/:id' element={<Payment />} />
+          <Route path='/booking-success' element={<BookingSuccess />} />
+          <Route path='/booking-failure' element={<BookingFailure />} />
+          <Route path='/booking-adons' element={<BookingAdons />} />
+        </Routes>
+      </BrowserRouter>
     </>
   )
 }

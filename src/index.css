@@ -40,7 +40,25 @@
     padding: 10px;
     width: 100%;
   }
-  
+
+  .react-datepicker__day-name, .react-datepicker__day, .react-datepicker__time-name{
+    width: 2.5rem !important;
+    line-height: 2.2rem !important;
+    font-size: 14px !important;
+    font-weight: 600;
+  }
+  .react-datepicker{
+    border: none !important;
+  }
+  .react-datepicker__header{
+    background-color: #fff !important;
+  }
+  .react-datepicker__day-name{
+    color: #333;
+  }
+  .react-datepicker__day-names .react-datepicker__day-name{
+    color: #777 !important;
+  }
 
 
   .title {
