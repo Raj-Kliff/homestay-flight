@@ -8,13 +8,13 @@ import FlightDetails from './FlightDetails'
 import { Link } from "react-router-dom";
 import { AppContext } from '../Context/appContext'
 
-const FlightCard = ({ className = '', data, res_index = null }) => {
+const FlightCard = ({ className = '', data, res_index = null, setSelectedFlight }) => {
   const { dropOffLocationType } = useContext(AppContext)
   const [isOpen, setIsOpen] = useState(false)
   const { Fare, Segments, TicketAdvisory } = data;
   const _segments = Segments.flat();
 
-  const renderDetail = () => {
+  const renderDetail = (data) => {
     if (!isOpen) return null
     const encrypted = encryptId(res_index);
     const journeyType = encryptId(dropOffLocationType);
@@ -24,7 +24,8 @@ const FlightCard = ({ className = '', data, res_index = null }) => {
           {_segments?.map((ele, index) => {
             return <FlightDetails key={index} params={ele} res_index={res_index} local_index={index} />
           })}
-          {res_index != null ? <Link to={`/booking/${encrypted}`} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Book Flight</Link> : "No data found"}
+          {/* {res_index != null ? <Link to={`/booking/${encrypted}`} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Book Flight</Link> : "No data found"} */}
+          <button onClick={()=>setSelectedFlight(data)} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Book Flight</button>
         </div>
       </>
     )
@@ -98,7 +99,7 @@ const FlightCard = ({ className = '', data, res_index = null }) => {
             </div>
           </div>
 
-          {/* TIME */}
+          {/* CODE */}
           <div className="hidden flex-[4] whitespace-nowrap lg:block">
             <div className="text-lg font-medium">{_segments[0].Origin.Airport.AirportCode} - {_segments[0].Destination.Airport.AirportCode}</div>
             <div className="mt-0.5 text-sm font-normal text-neutral-500">
@@ -129,7 +130,7 @@ const FlightCard = ({ className = '', data, res_index = null }) => {
       </div>
 
       {/* DETAIL */}
-      {renderDetail()}
+      {renderDetail(data)}
     </div>
   )
 }
