@@ -9,6 +9,7 @@ import { AppContext } from '../context/appContext';
 import { useParams } from "react-router-dom";
 import { axios_instance } from '../Helpers/axios_hook.js';
 import { nationalities } from '../helpers/nationalities';
+import { IoChevronForward } from "react-icons/io5";
 
 import { decryptId, getHoursFromISO, calculateHourDifference, formatDateTime, htmlToPlainText } from '../helpers/comm';
 
@@ -38,6 +39,8 @@ const Booking = () => {
   const [tax, settax] = useState(0);
   const [grandTotal, setgrandTotal] = useState({});
   const [insurance, setinsurance] = useState(25);
+
+  const [isGstVisible, setIsGstVisible] = useState(false);
 
 
   const handleAddPerson = () => {
@@ -1234,9 +1237,11 @@ const Booking = () => {
               </div>
             </div>
           </>}
-          <div>
-            <h5 className="font-bold pt-5 mb-5">GST <hr /></h5>
-            <div className="grid gap-4 mb-4 sm:grid-cols-[1fr_1fr_1fr_1fr]">
+          <div className="mt-[2rem]">
+            <h5 className="font-bold flex justify-between py-2 px-2 mb-5 bg-gray-50 border border-gray-300 rounded-lg items-center" onClick={() => setIsGstVisible(!isGstVisible)}><span>GST</span> <span className={`${isGstVisible ? 'rotate-90' : ''}`}><IoChevronForward /></span></h5>
+            <div className={` gap-4 mb-4 sm:grid-cols-4 transition-opacity duration-500 ease-in-out ${
+              isGstVisible ? 'opacity-100 pointer-events-auto grid' : 'opacity-0 pointer-events-none hidden'
+            }`}>
               <div>
                 <label
                   className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"

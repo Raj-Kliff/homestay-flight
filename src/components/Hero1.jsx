@@ -66,33 +66,6 @@ const DEMO_DATA = [
   },
 ];
 
-const multiCityRadioCheckCardData = [
-  {
-    id: 1,
-    from: "Delhi",
-    to: "Mumbai",
-    date: "Tue, 11 Feb 25",
-    timeFrom: "16:25",
-    timeTo: "23:50",
-  },
-  {
-    id: 2,
-    from: "Bangalore",
-    to: "Chennai",
-    date: "Wed, 12 Feb 25",
-    timeFrom: "09:00",
-    timeTo: "11:30",
-  },
-  {
-    id: 3,
-    from: "Kolkata",
-    to: "Hyderabad",
-    date: "Thu, 13 Feb 25",
-    timeFrom: "14:10",
-    timeTo: "17:45",
-  },
-];
-
 const Hero1 = () => {
   const {
     filteredFlights,
@@ -102,22 +75,20 @@ const Hero1 = () => {
   } = useContext(AppContext);
   const [selectedFlight, setSelectedFlight] = useState();
   const [selectedReturnFlight, setSelectedReturnFlight] = useState();
+  const [totalSum, setTotalSum] = useState(0);
 
   const [visibleCount, setVisibleCount] = useState(10); // Initially show 10 items
   const loadMore = () => {
     setVisibleCount((prev) => prev + 10); // Load 10 more items
   };
 
-  const [selected, setSelected] = useState(multiCityRadioCheckCardData[0]); //multicity selected radio card
   const [multicitySelectedFlights, setMultiCitySelectedFlights] = useState([]);
   const [selectedIndex, setSelectedIndex] = useState(0) // Track the selected tab index
-  console.log(multicitySelectedFlights)
 
   const handleAddToMulticityFlights = (flight) => {
     if (selectedIndex <= Object.keys(categories).length - 1) {
       setSelectedIndex((prevIndex) => prevIndex + 1);
     }
-    // console.log('length::',multicitySelectedFlights.length)
     setMultiCitySelectedFlights([...multicitySelectedFlights, flight]);
   };
 
@@ -208,30 +179,23 @@ const Hero1 = () => {
 
   // Disable button when all tabs have been visited (i.e., when the last tab is selected)
   const isLastTab = selectedIndex === Object.keys(categories).length - 1
-  console.log("index::",selectedIndex)
 
   const handleRemoveLastFlight = () => {
     setSelectedIndex((prevIndex) => prevIndex - 1);
     setMultiCitySelectedFlights((prevFlights) => prevFlights.slice(0, -1));
   };
-  
 
-
-  // multicity radio card checkbox
-  function CheckIcon(props) {
-    return (
-      <svg viewBox="0 0 24 24" fill="none" {...props}>
-        <circle cx={12} cy={12} r={12} fill="#fff" opacity="0.2" />
-        <path
-          d="M7 13l3 3 7-7"
-          stroke="#fff"
-          strokeWidth={1.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    );
+  const handleNextButton = () => {
+    if (selectedIndex == selectedFlight.length-1) {
+      setSelectedIndex((prevIndex) => prevIndex + 1);
+    }
   }
+
+  useEffect(() => {
+    const sum = multicitySelectedFlights.reduce((acc, item) => acc + parseInt(item.price.replace('$', '').replace(',','')), 0);
+    setTotalSum(sum);
+  },[multicitySelectedFlights])
+  
 
   const renderOneWayCard = () => {
     return (
@@ -368,65 +332,6 @@ const Hero1 = () => {
           </Tab.Group>
         </div>
 
-        {/* <div className="w-full px-4 py-8">
-        <div className="w-full">
-          <RadioGroup value={selected} onChange={setSelected}>
-            <RadioGroup.Label className="sr-only">Server size</RadioGroup.Label>
-            <div className="space-y-2 gap-3 grid grid-cols-5 ">
-              {multiCityRadioCheckCardData.map((item) => (
-                <RadioGroup.Option
-                  key={item.id}
-                  value={item}
-                  className={({ active, checked }) =>
-                    `${
-                      active
-                        ? 'ring-2 ring-white/60 ring-offset-2 ring-offset-sky-300'
-                        : ''
-                    }
-                    ${checked ? 'bg-gray-900 text-white' : 'bg-white'}
-                      relative flex cursor-pointer border border-gray-200 rounded-lg px-5 py-4 shadow-md focus:outline-none`
-                  }
-                >
-                  {({ active, checked }) => (
-                    <>
-                      <div className="flex w-full items-center justify-between">
-                        <div className="flex items-center">
-                          <div className="text-sm">
-                            <RadioGroup.Label
-                              as="p"
-                              className={`font-medium  ${
-                                checked ? 'text-white' : 'text-gray-900'
-                              }`}
-                            >
-                              {item.from} - {item.to}
-                            </RadioGroup.Label>
-                            <RadioGroup.Description
-                              as="span"
-                              className={`inline ${
-                                checked ? 'text-sky-100' : 'text-gray-500'
-                              }`}
-                            >
-                              <p>
-                                {item.date}
-                              </p>{' '}
-                              <p>{item.timeFrom} - {item.timeTo}</p>
-                            </RadioGroup.Description>
-                          </div>
-                        </div>
-                        {checked && (
-                          <div className="shrink-0 text-white">
-                            <CheckIcon className="h-6 w-6" />
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </RadioGroup.Option>
-              ))}
-            </div>
-          </RadioGroup>
-        </div>
-      </div> */}
         {/* ---------------------------- */}
         <div className="lg:p-10 lg:bg-neutral-50 lg:dark:bg-black/20 grid grid-cols-1 gap-6  rounded-3xl">
           {filteredFlights.length != 0
@@ -560,7 +465,8 @@ const Hero1 = () => {
                 </div>
               ))
             }
-            <div className="flex ms-auto">
+            <div className="flex items-center ms-auto">
+              <span className="text-purple-500 font-bold text-xl mr-3">INR {totalSum}</span>
               <button
                 // onClick={()=>setSelectedIndex((prevIndex) => prevIndex + 1)}
                 className={`bg-black px-4 py-2 w-fit rounded text-white hover:bg-gray-800 duration-500 ${selectedIndex === Object.keys(categories).length ? 'cursor-pointer' : 'hidden'}`}
@@ -568,7 +474,8 @@ const Hero1 = () => {
                 Book Flight
               </button>
                 <button
-                onClick={()=>setSelectedIndex((prevIndex) => prevIndex + 1)}
+                // onClick={()=>setSelectedIndex((prevIndex) => prevIndex + 1)}
+                onClick={()=>handleNextButton()}
                 className={`bg-black ms-3 px-4 py-2 w-fit rounded text-white hover:bg-gray-800 duration-500 ${(isLastTab || selectedIndex >= Object.keys(categories).length) ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}
                 disabled={isLastTab || selectedIndex >= Object.keys(categories).length}
               >

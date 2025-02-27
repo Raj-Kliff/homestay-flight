@@ -6,7 +6,7 @@ import React, { FC, useState, useContext } from 'react'
 import { getHoursFromISO, calculateHourDifference, fullDate, encryptId } from '../helpers/comm';
 import FlightDetails from './FlightDetails'
 import { Link } from "react-router-dom";
-import { AppContext } from '../Context/appContext'
+import { AppContext } from '../context/appContext'
 
 const FlightCard = ({ className = '', data, res_index = null, setSelectedFlight }) => {
   const { dropOffLocationType } = useContext(AppContext)
@@ -24,8 +24,8 @@ const FlightCard = ({ className = '', data, res_index = null, setSelectedFlight 
           {_segments?.map((ele, index) => {
             return <FlightDetails key={index} params={ele} res_index={res_index} local_index={index} />
           })}
-          {/* {res_index != null ? <Link to={`/booking/${encrypted}`} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Book Flight</Link> : "No data found"} */}
-          <button onClick={()=>setSelectedFlight(data)} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Book Flight</button>
+          {res_index != null ? <Link to={`/booking/${encrypted}`} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Book Flight</Link> : "No data found"}
+          {/* <button onClick={()=>setSelectedFlight(data)} className="bg-black px-4 py-2 w-fit rounded relative bottom-6 text-white float-right hover:bg-gray-800 duration-500 cursor-pointer">Book Flight</button> */}
         </div>
       </>
     )
