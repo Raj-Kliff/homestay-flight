@@ -5,7 +5,10 @@ import Payment from "./pages/Payment"
 import BookingSuccess from "./pages/BookingSuccess"
 import BookingFailure from "./pages/BookingFailure"
 import BookingAdons from "./pages/BookingAdons"
+import LoginPage from "./pages/LoginPage"
 import Login from "./pages/Login"
+import Signup from "./pages/Signup"
+import AdminRoutes from "./admin/pages/AdminRoutes"
 
 function App() {
 
@@ -20,6 +23,8 @@ function App() {
           <Route path='/booking-failure' element={<BookingFailure />} />
           <Route path='/booking-adons' element={<BookingAdons />} />
           <Route path='/login' element={<Login />} />
+          <Route path='/signup' element={<Signup />} />
+          <Route path="user/*" element={<AdminRoutes/>} />
         </Routes>
       </BrowserRouter>
     </>
